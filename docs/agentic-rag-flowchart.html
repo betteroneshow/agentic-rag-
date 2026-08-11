@@ -1,0 +1,293 @@
+<div id="agentic-rag-flowchart" class="viz">
+  <style>
+    #agentic-rag-flowchart {
+      --bg: #0f172a;
+      --panel: #111827;
+      --panel-2: #1f2937;
+      --line: #94a3b8;
+      --text: #e5eefb;
+      --muted: #a7b5c9;
+      --accent: #60a5fa;
+      --accent-2: #34d399;
+      --warn: #f59e0b;
+      --danger: #f87171;
+      color: var(--text);
+      font-family: "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+      background: linear-gradient(180deg, #0b1220 0%, #111827 100%);
+      border: 1px solid #243246;
+      border-radius: 12px;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    #agentic-rag-flowchart .title {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: baseline;
+      margin: 0 0 14px;
+    }
+    #agentic-rag-flowchart h1 {
+      font-size: 20px;
+      line-height: 1.2;
+      margin: 0;
+      font-weight: 600;
+    }
+    #agentic-rag-flowchart .subtitle {
+      color: var(--muted);
+      font-size: 13px;
+    }
+    #agentic-rag-flowchart svg {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    #agentic-rag-flowchart .lane {
+      fill: rgba(15, 23, 42, 0.45);
+      stroke: rgba(148, 163, 184, 0.22);
+      stroke-width: 1;
+    }
+    #agentic-rag-flowchart .lane-label {
+      fill: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0;
+    }
+    #agentic-rag-flowchart .node rect,
+    #agentic-rag-flowchart .decision polygon {
+      fill: rgba(17, 24, 39, 0.95);
+      stroke: rgba(148, 163, 184, 0.55);
+      stroke-width: 1.4;
+    }
+    #agentic-rag-flowchart .node[data-kind="start"] rect {
+      stroke: rgba(52, 211, 153, 0.9);
+      fill: rgba(6, 95, 70, 0.25);
+    }
+    #agentic-rag-flowchart .node[data-kind="memory"] rect {
+      stroke: rgba(96, 165, 250, 0.85);
+      fill: rgba(30, 41, 59, 0.95);
+    }
+    #agentic-rag-flowchart .node[data-kind="answer"] rect {
+      stroke: rgba(245, 158, 11, 0.85);
+    }
+    #agentic-rag-flowchart .node[data-kind="retry"] rect {
+      stroke: rgba(248, 113, 113, 0.85);
+    }
+    #agentic-rag-flowchart .node .label,
+    #agentic-rag-flowchart .decision .label {
+      fill: var(--text);
+      font-size: 14px;
+      font-weight: 600;
+    }
+    #agentic-rag-flowchart .node .sub,
+    #agentic-rag-flowchart .decision .sub,
+    #agentic-rag-flowchart .note {
+      fill: var(--muted);
+      font-size: 11px;
+    }
+    #agentic-rag-flowchart .decision polygon {
+      fill: rgba(30, 41, 59, 0.95);
+    }
+    #agentic-rag-flowchart .edge {
+      fill: none;
+      stroke: rgba(148, 163, 184, 0.9);
+      stroke-width: 2;
+    }
+    #agentic-rag-flowchart .edge.memory {
+      stroke-dasharray: 6 5;
+      stroke: rgba(96, 165, 250, 0.9);
+    }
+    #agentic-rag-flowchart .edge.retry {
+      stroke: rgba(248, 113, 113, 0.95);
+    }
+    #agentic-rag-flowchart .edge.ok {
+      stroke: rgba(52, 211, 153, 0.95);
+    }
+    #agentic-rag-flowchart .edge-label {
+      fill: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+    }
+    #agentic-rag-flowchart .legend {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px 16px;
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    #agentic-rag-flowchart .legend div {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    #agentic-rag-flowchart .swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 4px;
+      background: var(--panel-2);
+      border: 1px solid rgba(148, 163, 184, 0.55);
+      flex: 0 0 auto;
+    }
+    #agentic-rag-flowchart .swatch.memory { border-color: rgba(96, 165, 250, 0.9); }
+    #agentic-rag-flowchart .swatch.search { border-color: rgba(245, 158, 11, 0.9); }
+    #agentic-rag-flowchart .swatch.retry { border-color: rgba(248, 113, 113, 0.9); }
+    #agentic-rag-flowchart .swatch.success { border-color: rgba(52, 211, 153, 0.95); }
+  </style>
+
+  <div class="title">
+    <h1>Agentic RAG 工作流</h1>
+    <div class="subtitle">基于 `agentic_rag/graph.py` 的实际节点与分支</div>
+  </div>
+
+  <svg viewBox="0 0 1400 920" role="img" aria-labelledby="flow-title flow-desc">
+    <title id="flow-title">Agentic RAG 流程图</title>
+    <desc id="flow-desc">显示长期记忆检索、查询路由、内循环检索纠错、答案生成、外循环答案纠错和记忆固化的完整流程。</desc>
+
+    <defs>
+      <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(148, 163, 184, 0.95)"></path>
+      </marker>
+      <marker id="arrow-success" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(52, 211, 153, 0.95)"></path>
+      </marker>
+      <marker id="arrow-retry" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(248, 113, 113, 0.95)"></path>
+      </marker>
+    </defs>
+
+    <rect class="lane" x="40" y="70" width="1320" height="210" rx="18"></rect>
+    <text class="lane-label" x="58" y="98">入口与路由</text>
+
+    <rect class="lane" x="40" y="310" width="1320" height="280" rx="18"></rect>
+    <text class="lane-label" x="58" y="338">内循环：检索与文档纠错</text>
+
+    <rect class="lane" x="40" y="620" width="1320" height="220" rx="18"></rect>
+    <text class="lane-label" x="58" y="648">外循环：答案纠错与记忆固化</text>
+
+    <g class="node" data-kind="start" transform="translate(100,120)">
+      <rect width="180" height="82" rx="14"></rect>
+      <text class="label" x="90" y="34" text-anchor="middle">用户输入</text>
+      <text class="sub" x="90" y="56" text-anchor="middle">query</text>
+    </g>
+
+    <g class="node" data-kind="memory" transform="translate(340,120)">
+      <rect width="220" height="82" rx="14"></rect>
+      <text class="label" x="110" y="32" text-anchor="middle">retrieve_memory</text>
+      <text class="sub" x="110" y="54" text-anchor="middle">检索长期记忆 / 初始化状态</text>
+    </g>
+
+    <g class="node" transform="translate(620,120)">
+      <rect width="200" height="82" rx="14"></rect>
+      <text class="label" x="100" y="32" text-anchor="middle">route_query</text>
+      <text class="sub" x="100" y="54" text-anchor="middle">选择 direct / search 路由</text>
+    </g>
+
+    <g class="decision" transform="translate(900,92)">
+      <polygon points="110,0 220,56 110,112 0,56"></polygon>
+      <text class="label" x="110" y="46" text-anchor="middle">route == direct?</text>
+      <text class="sub" x="110" y="72" text-anchor="middle">direct / search</text>
+    </g>
+
+    <g class="node" data-kind="answer" transform="translate(1140,120)">
+      <rect width="180" height="82" rx="14"></rect>
+      <text class="label" x="90" y="32" text-anchor="middle">direct_response</text>
+      <text class="sub" x="90" y="54" text-anchor="middle">无需检索，直接回答</text>
+    </g>
+
+    <g class="node" transform="translate(620,370)">
+      <rect width="200" height="82" rx="14"></rect>
+      <text class="label" x="100" y="32" text-anchor="middle">rewrite_query</text>
+      <text class="sub" x="100" y="54" text-anchor="middle">查询重写 / 优化检索输入</text>
+    </g>
+
+    <g class="node" transform="translate(380,370)">
+      <rect width="200" height="82" rx="14"></rect>
+      <text class="label" x="100" y="32" text-anchor="middle">retrieve_documents</text>
+      <text class="sub" x="100" y="54" text-anchor="middle">hierarchical / chunk / web</text>
+    </g>
+
+    <g class="node" transform="translate(620,500)">
+      <rect width="200" height="82" rx="14"></rect>
+      <text class="label" x="100" y="32" text-anchor="middle">grade_documents</text>
+      <text class="sub" x="100" y="54" text-anchor="middle">判断文档是否相关</text>
+    </g>
+
+    <g class="decision" transform="translate(900,480)">
+      <polygon points="110,0 220,56 110,112 0,56"></polygon>
+      <text class="label" x="110" y="46" text-anchor="middle">文档相关?</text>
+      <text class="sub" x="110" y="72" text-anchor="middle">是 / 否</text>
+    </g>
+
+    <g class="node" data-kind="retry" transform="translate(1140,500)">
+      <rect width="180" height="82" rx="14"></rect>
+      <text class="label" x="90" y="32" text-anchor="middle">generate_response</text>
+      <text class="sub" x="90" y="54" text-anchor="middle">基于上下文生成答案</text>
+    </g>
+
+    <g class="node" transform="translate(620,710)">
+      <rect width="200" height="82" rx="14"></rect>
+      <text class="label" x="100" y="32" text-anchor="middle">grade_relevance</text>
+      <text class="sub" x="100" y="54" text-anchor="middle">评估最终答案是否相关</text>
+    </g>
+
+    <g class="decision" transform="translate(900,680)">
+      <polygon points="110,0 220,56 110,112 0,56"></polygon>
+      <text class="label" x="110" y="46" text-anchor="middle">答案相关?</text>
+      <text class="sub" x="110" y="72" text-anchor="middle">是 / 否</text>
+    </g>
+
+    <g class="node" data-kind="answer" transform="translate(1140,710)">
+      <rect width="180" height="82" rx="14"></rect>
+      <text class="label" x="90" y="32" text-anchor="middle">consolidate_memory</text>
+      <text class="sub" x="90" y="54" text-anchor="middle">提炼并写入长期记忆</text>
+    </g>
+
+    <rect x="80" y="708" width="240" height="120" rx="16" fill="rgba(30, 41, 59, 0.9)" stroke="rgba(96, 165, 250, 0.75)" stroke-dasharray="7 6"></rect>
+    <text class="label" x="200" y="746" text-anchor="middle">长期记忆库</text>
+    <text class="sub" x="200" y="772" text-anchor="middle">读取: retrieve_memory</text>
+    <text class="sub" x="200" y="792" text-anchor="middle">写入: consolidate_memory</text>
+
+    <path class="edge memory" marker-end="url(#arrow)" d="M 280 161 C 300 161, 310 161, 340 161"></path>
+    <path class="edge" marker-end="url(#arrow)" d="M 560 161 C 590 161, 600 161, 620 161"></path>
+    <path class="edge" marker-end="url(#arrow)" d="M 820 161 C 860 161, 870 161, 900 161"></path>
+    <path class="edge" marker-end="url(#arrow-success)" d="M 1120 161 C 1130 161, 1138 161, 1140 161"></path>
+
+    <path class="edge" marker-end="url(#arrow)" d="M 1010 204 C 1010 250, 720 250, 720 370"></path>
+    <text class="edge-label" x="890" y="236">否 / 检索</text>
+
+    <path class="edge" marker-end="url(#arrow)" d="M 720 452 C 720 476, 720 476, 720 500"></path>
+    <path class="edge" marker-end="url(#arrow)" d="M 820 541 C 860 541, 870 541, 900 541"></path>
+    <text class="edge-label" x="838" y="523">是</text>
+
+    <path class="edge retry" marker-end="url(#arrow-retry)" d="M 1010 592 C 1010 636, 720 636, 720 710"></path>
+    <text class="edge-label" x="876" y="632">否 / 重试</text>
+
+    <path class="edge ok" marker-end="url(#arrow-success)" d="M 1010 792 C 1040 792, 1080 792, 1140 792"></path>
+    <text class="edge-label" x="1030" y="776">是</text>
+
+    <path class="edge retry" marker-end="url(#arrow-retry)" d="M 1320 541 C 1350 541, 1350 760, 1320 760"></path>
+    <text class="edge-label" x="1332" y="646" text-anchor="end">否 / 校正重写</text>
+
+    <path class="edge" marker-end="url(#arrow)" d="M 960 792 C 880 792, 400 792, 320 792"></path>
+    <text class="edge-label" x="610" y="776">写回长期记忆</text>
+
+    <path class="edge" marker-end="url(#arrow)" d="M 1010 204 C 1010 240, 1260 240, 1260 500"></path>
+    <text class="edge-label" x="1126" y="250">direct</text>
+
+    <path class="edge" marker-end="url(#arrow)" d="M 1010 204 C 1010 250, 1010 250, 1010 480"></path>
+    <text class="edge-label" x="1020" y="344">search</text>
+
+    <path class="edge" marker-end="url(#arrow)" d="M 1140 541 C 1140 620, 1140 620, 1140 710"></path>
+    <path class="edge" marker-end="url(#arrow)" d="M 800 411 C 860 411, 900 411, 900 411"></path>
+    <text class="edge-label" x="842" y="398">rewrite 后检索</text>
+
+    <text class="note" x="84" y="896">文档检索分支顺序：hierarchical_search → direct_chunk_search → web_search；答案重试最多 2 次。</text>
+  </svg>
+
+  <div class="legend" aria-label="图例">
+    <div><span class="swatch memory"></span>长期记忆读写</div>
+    <div><span class="swatch search"></span>检索与重试路径</div>
+    <div><span class="swatch retry"></span>重写 / 校正回路</div>
+    <div><span class="swatch success"></span>成功收敛路径</div>
+  </div>
+</div>

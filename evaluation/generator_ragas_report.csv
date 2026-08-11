@@ -1,0 +1,4 @@
+user_input,retrieved_contexts,response,reference,faithfulness,answer_relevancy,context_recall
+我们公司今年的年假规定是什么？,[],,应提及年假天数、申请流程和特殊规定,,,0.0
+解释一下什么是RAG,[],,应解释RAG的核心思想：检索+生成,,,0.0
+帮我把‘公司报销政策’和‘出差申请流程’这两个文档的内容总结一下,[],,应分别总结两个文档的核心内容,,,0.0

@@ -1,0 +1,7 @@
+[server]
+# 项目运行时会加载大量带懒属性的第三方模块。关闭源码热更新扫描，
+# 避免 Streamlit 遍历 transformers 的可选视觉模块并误报缺少 torchvision。
+fileWatcherType = "none"
+
+[browser]
+gatherUsageStats = false

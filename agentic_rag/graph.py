@@ -17,6 +17,9 @@ from agentic_rag.nodes import (
     grade_relevance_node,
     direct_response_node,
     retrieval_fallback_node,
+    check_route_requirements_node,
+    request_route_clarification_node,
+    update_working_memory_node,
 )
 
 def build_graph():
@@ -29,6 +32,9 @@ def build_graph():
     workflow.add_node("consolidate_memory", consolidate_memory_node)
     # 核心流程
     workflow.add_node("route_query", route_query_node)
+    workflow.add_node("update_working_memory", update_working_memory_node)
+    workflow.add_node("check_route_requirements", check_route_requirements_node)
+    workflow.add_node("request_route_clarification", request_route_clarification_node)
     workflow.add_node("rewrite_query", rewrite_query_node)
     workflow.add_node("retrieve_documents", retrieve_documents_node)
     workflow.add_node("grade_documents", grade_documents_node)
@@ -42,7 +48,17 @@ def build_graph():
 
     # 1. 从“回忆”开始
     workflow.set_entry_point("retrieve_memory")
-    workflow.add_edge("retrieve_memory", "route_query")
+    workflow.add_edge("retrieve_memory", "update_working_memory")
+    workflow.add_edge("update_working_memory", "check_route_requirements")
+    workflow.add_conditional_edges(
+        "check_route_requirements",
+        lambda state: "clarify" if state.get("needs_clarification") else "continue",
+        {
+            "clarify": "request_route_clarification",
+            "continue": "route_query",
+        },
+    )
+    workflow.add_edge("request_route_clarification", END)
 
     # 2. “路由”后，对于需要检索的，先“重写查询”
     workflow.add_conditional_edges(

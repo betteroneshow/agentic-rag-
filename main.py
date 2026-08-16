@@ -65,9 +65,11 @@ def main():
     
     graph = build_graph()
     session_state = {
+        "user_id": memory.DEFAULT_USER_ID,
         "conversation_history": [],
         "conversation_summary": "",
         "conversation_turn_count": 0,
+        "working_memory": {},
     }
 
     print("欢迎使用Agentic RAG系统！")
@@ -93,9 +95,11 @@ def main():
         final_state = graph.invoke(inputs, config=config)
         # 显式保存跨轮短期记忆；不依赖未配置的 LangGraph checkpointer。
         session_state = {
+            "user_id": final_state.get("user_id", memory.DEFAULT_USER_ID),
             "conversation_history": final_state.get("conversation_history", []),
             "conversation_summary": final_state.get("conversation_summary", ""),
             "conversation_turn_count": final_state.get("conversation_turn_count", 0),
+            "working_memory": final_state.get("working_memory", {}),
         }
         print("--- 系统处理结束 ---")
 

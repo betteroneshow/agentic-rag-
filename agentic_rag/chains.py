@@ -5,18 +5,10 @@
 定义了系统中使用的各种LLM链，例如查询路由、查询重写和答案评估。
 """
 
-try:
-    import torch
-except ImportError:  # pragma: no cover - optional for OpenAI embedding mode
-    torch = None
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-try:
-    from langchain_huggingface import HuggingFaceEmbeddings
-except ImportError:  # pragma: no cover - optional for OpenAI embedding mode
-    HuggingFaceEmbeddings = None
 from chromadb.utils import embedding_functions
 from chromadb.api.types import Documents, Embeddings
 
@@ -86,10 +78,12 @@ def get_embedding_function():
         )
     
     elif EMBEDDING_PROVIDER == 'local':
-        if torch is None:
-            raise ImportError("Local embedding mode requires torch to be installed.")
-        if HuggingFaceEmbeddings is None:
-            raise ImportError("Local embedding mode requires langchain-huggingface to be installed.")
+        # 远程 Embedding 模式不应在应用启动时加载 torch/transformers。
+        # 这既节省内存，也避免 Streamlit 文件监视器扫描可选视觉模型。
+        try:
+            import torch
+        except ImportError as exc:
+            raise ImportError("Local embedding mode requires torch to be installed.") from exc
         device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"--- 使用ChromaDB原生本地嵌入模型: {LOCAL_EMBEDDING_MODEL_PATH} (设备: {device}) ---")
         return embedding_functions.SentenceTransformerEmbeddingFunction(
@@ -118,6 +112,28 @@ class DocumentRelevanceGrade(BaseModel):
     """评估一组文档是否与用户问题相关。"""
     is_relevant: bool = Field(description="布尔值，表示这组文档是否包含足够的信息来回答问题。")
 
+class RouteRequirementCheck(BaseModel):
+    """判断距离/路线类问题是否缺少执行所需地点。"""
+    is_route_question: bool = Field(description="是否在询问距离、路线、到达方式、交通耗时或导航。")
+    needs_clarification: bool = Field(description="结合最近对话后，是否仍缺少路线计算必需信息。")
+    missing_fields: list[str] = Field(description="缺失字段，只能包含 origin、destination；无缺失时为空数组。")
+    clarification_question: str = Field(description="需要补充时向用户提出的简洁中文问题；无需补充时为空字符串。")
+
+class WorkingMemoryUpdate(BaseModel):
+    """当前任务的结构化工作记忆。"""
+    goal: str = Field(description="用户当前要完成的主要目标；无法判断时为空字符串。")
+    task_type: str = Field(description="任务类型，如 itinerary、route、weather、knowledge_qa、chat。")
+    known_facts: list[str] = Field(description="当前任务中已确认且仍有效的事实。")
+    constraints: list[str] = Field(description="预算、天数、同行人员、偏好、时间等任务约束。")
+    origin: str = Field(description="当前路线任务的起点；未知时为空字符串。")
+    destination: str = Field(description="当前路线或旅行任务的目的地；未知时为空字符串。")
+    travel_dates: list[str] = Field(description="已确认的旅行日期或时间范围。")
+    completed_items: list[str] = Field(description="当前任务已经完成或确认的事项。")
+    pending_items: list[str] = Field(description="为完成目标仍需执行的事项。")
+    missing_information: list[str] = Field(description="必须向用户补充确认的信息。")
+    current_stage: str = Field(description="当前任务阶段，如 collecting、planning、retrieving、answering、completed。")
+    status: str = Field(description="active、waiting_user、completed 或 cancelled。")
+
 # --- LLM 链定义 ---
 
 def get_document_relevance_grader_chain():
@@ -126,6 +142,43 @@ def get_document_relevance_grader_chain():
     prompt = ChatPromptTemplate.from_messages([
         ("system", "你是一位信息相关性评估专家。请根据用户问题，判断下面提供的一组文档是否包含足够的相关信息来回答该问题。必须只返回符合格式要求的 JSON，不要只返回 True 或 False。\n{format_instructions}"),
         ("human", "用户问题: {query}\n\n检索到的文档:\n{documents}")
+    ]).partial(format_instructions=parser.get_format_instructions())
+    return prompt | llm | parser
+
+def get_route_requirement_chain():
+    """获取路线类问题的信息完整性检查链。"""
+    parser = JsonOutputParser(pydantic_object=RouteRequirementCheck)
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", """你是旅游路线需求分析器。判断用户是否询问两地距离、怎么到达、导航路线、交通方式或出行耗时，并检查起点和终点是否完整。
+
+规则：
+1. 必须结合对话摘要和最近对话，用户刚补充的地点可以补全上一轮缺失字段。
+2. ‘从A到B’、‘A离B多远’表示起点和终点完整，不要追问。
+3. ‘怎么去橘子洲’、‘到机场多远’通常缺少 origin，应询问用户目前所在地或出发地点。
+4. ‘从长沙站怎么走’通常缺少 destination，应询问目的地。
+5. 如果起点和终点都缺少，应同时询问从哪里出发、准备去哪里。
+6. 普通旅游交通攻略（如‘长沙交通方便吗’）不是具体路线计算，不要追问。
+7. 不得猜测用户位置，不得把长期偏好当作当前所在地。
+8. 只返回符合要求的 JSON。\n{format_instructions}"""),
+        ("human", "<working_memory>{working_memory}</working_memory>\n<relevant_long_term_memories>{memories}</relevant_long_term_memories>\n<conversation_summary>{conversation_summary}</conversation_summary>\n<recent_history>{recent_history}</recent_history>\n<current_query>{query}</current_query>")
+    ]).partial(format_instructions=parser.get_format_instructions())
+    return prompt | llm | parser
+
+def get_working_memory_chain():
+    """获取跨轮任务工作记忆更新链。"""
+    parser = JsonOutputParser(pydantic_object=WorkingMemoryUpdate)
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", """你是 Agent 工作记忆管理器。根据旧工作记忆、最近对话和用户新输入，返回更新后的完整工作记忆。
+
+规则：
+1. 只记录当前任务所需的信息，不保存寒暄、检索文本或模型推理过程。
+2. 用户补充‘我在长沙站’时，可填写当前路线任务 origin；结合旧目标保留 destination。
+3. 用户明确纠正、取消或更改信息时，以最新表达为准，删除被替代内容。
+4. 如果用户明显开启全新任务，重置与旧任务无关的字段；如果只是追问或补充，保留相关字段。
+5. 当前所在地、单次预算等只存在工作记忆，不得视为长期记忆。
+6. 不得猜测地点、日期、预算或偏好。
+7. 数组去重，内容简洁；只返回符合格式的 JSON。\n{format_instructions}"""),
+        ("human", "<previous_working_memory>{working_memory}</previous_working_memory>\n<conversation_summary>{conversation_summary}</conversation_summary>\n<recent_history>{recent_history}</recent_history>\n<current_query>{query}</current_query>")
     ]).partial(format_instructions=parser.get_format_instructions())
     return prompt | llm | parser
 
@@ -143,7 +196,7 @@ def get_initial_rewriter_chain():
     parser = JsonOutputParser(pydantic_object=RewriteQuery)
     prompt = ChatPromptTemplate.from_messages([
         ("system", "你是一位查询优化专家。结合对话摘要和最近对话，消解‘那个、它、便宜的’等指代，将问题改写为独立、明确、适合检索的查询。不要添加上下文中不存在的事实。\n{format_instructions}"),
-        ("human", "<conversation_summary>{conversation_summary}</conversation_summary>\n<recent_history>{recent_history}</recent_history>\n<original_query>{query}</original_query>")
+        ("human", "<working_memory>{working_memory}</working_memory>\n<relevant_long_term_memories>{memories}</relevant_long_term_memories>\n<conversation_summary>{conversation_summary}</conversation_summary>\n<recent_history>{recent_history}</recent_history>\n<original_query>{query}</original_query>")
     ]).partial(format_instructions=parser.get_format_instructions())
     return prompt | llm | parser
 
@@ -203,6 +256,7 @@ def get_memory_consolidation_chain():
     prompt = ChatPromptTemplate.from_messages([
         ("system", "你是一个记忆提炼专家。请分析以下对话，并从中提取最值得长期记住的核心信息。"
                    "如果存在值得未来参考的信息，将 should_save 设为 true，并填写 text、type 和1到10的 importance。"
+                   "仅保存稳定偏好、长期有效事实或用户明确确认的重要结论。不要保存当前所在地、单次路线起点、临时天气、一次性预算、寒暄或系统追问；这些只属于当前任务。"
                    "如果不存在，将 should_save 设为 false、text 设为空字符串、type 设为 fact、importance 设为0。"
                    "无论是否需要保存，都必须只返回符合要求的 JSON，不能返回普通文本。\n\n{format_instructions}"),
         ("human", "对话历史:\n\n{conversation_history}")

@@ -4,6 +4,7 @@ langgraph
 langchain-community
 langchain-openai
 chromadb
+PyMySQL>=1.1,<2
 python-dotenv
 tiktoken
 langchain-tavily
@@ -24,3 +25,4 @@ tqdm
 langchain-chroma
 duckdb
 duckdb-engine
+mcp>=1.10,<2

@@ -41,3 +41,8 @@ class AgentState(TypedDict):
     completed_steps: List[str]
     pending_steps: List[str]
     current_parameters: dict
+    needs_clarification: bool
+    missing_route_fields: List[str]
+    clarification_question: str
+    user_id: str
+    working_memory: dict
